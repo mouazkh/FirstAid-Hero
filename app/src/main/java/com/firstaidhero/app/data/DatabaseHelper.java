@@ -1,37 +1,46 @@
 package com.firstaidhero.app.data;
 
-import android.content.ContentValues;
-import android.content.Context;
-import android.database.Cursor;
-import android.database.SQLException;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteException;
-import android.database.sqlite.SQLiteOpenHelper;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import android.content.ContentValues;  // حاوية (اسم العمود ← القيمة) تُستخدم في الإدخال والتعديل على قاعدة البيانات
+import android.content.Context;  // سياق التطبيق للوصول إلى الموارد والملفات وقواعد البيانات
+import android.database.Cursor;  // مؤشر لقراءة نتائج الاستعلام صفاً صفاً
+import android.database.SQLException;  // خطأ عام في تنفيذ أوامر SQL
+import android.database.sqlite.SQLiteDatabase;  // كائن قاعدة البيانات لتنفيذ الاستعلامات والأوامر
+import android.database.sqlite.SQLiteException;  // خطأ خاص بـ SQLite (مثل عدم دعم FTS4 على الجهاز)
+import android.database.sqlite.SQLiteOpenHelper;  // الفئة الأب لإدارة إنشاء قاعدة البيانات وترقية إصداراتها
+import java.io.File;  // التعامل مع الملفات والمجلدات
+import java.io.FileOutputStream;  // الكتابة إلى ملف
+import java.io.IOException;  // خطأ في القراءة أو الكتابة
+import java.io.InputStream;  // القراءة من مصدر بيانات (ملف assets)
+import java.io.OutputStream;  // الكتابة إلى مصدر بيانات
 
 /**
- * All app data stays in this on-device SQLite database.
- * The database ships pre-populated in {@code assets/databases/} and is copied
- * on first launch, so guidance works fully offline.
+ * مدير قاعدة البيانات المحلية SQLite (يرث SQLiteOpenHelper):
+ * - ينسخ قاعدة البيانات الجاهزة من مجلد assets عند أول تشغيل.
+ * - ينشئ الجداول ويرحّل الإصدارات القديمة دون حذف بيانات المستخدم.
+ * - يحتوي كل استعلامات البحث (LIKE و MATCH) وعمليات CRUD والإحصاءات.
  */
 public class DatabaseHelper extends SQLiteOpenHelper {
+    /** اسم ملف القاعدة على الجهاز، ومسارها داخل assets، ورقم إصدار المخطط الحالي. */
     private static final String DB_NAME = "firstaid_hero.db";
     private static final String ASSET_PATH = "databases/firstaid_hero.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 6;
 
+    /**
+     * نسخة احتياطية من الحالات الإسعافية: الرقم، العنوان (إنجليزي/عربي)، الخطورة، الأعراض (إنجليزي/عربي).
+     * تُستخدم إذا تعذّر نسخ ملف assets، وفي ترحيل الإصدارات.
+     */
     private static final String[][] SEED_CASES = {
         {"1", "Severe bleeding", "نزيف شديد", "critical", "Heavy bleeding or a deep wound", "نزيف غزير أو جرح عميق"},
         {"2", "Burns", "حروق", "moderate", "Pain, redness, blistering, or skin damage", "ألم أو احمرار أو بثور أو تلف في الجلد"},
         {"3", "Choking", "اختناق", "critical", "Difficulty breathing, speaking, or coughing", "صعوبة في التنفس أو الكلام أو السعال"},
         {"4", "Possible heart attack", "اشتباه نوبة قلبية", "critical", "Chest discomfort, breathlessness, sweating, or nausea", "انزعاج في الصدر أو ضيق نفس أو تعرق أو غثيان"},
         {"5", "Drowning / water emergency", "غرق أو طارئ مائي", "critical", "A person in or recently removed from water who may be unresponsive", "شخص في الماء أو أُخرج منه وقد يكون فاقداً للاستجابة"},
-        {"6", "Snake or insect bite", "لدغات الأفاعي أو الحشرات", "moderate", "A bite or sting with pain, swelling, or other concerning symptoms", "لدغة أو لسعة مع ألم أو تورم أو أعراض مقلقة"}
+        {"6", "Snake or insect bite", "لدغات الأفاعي والحشرات", "moderate", "A bite or sting with pain, swelling, or other concerning symptoms", "لدغة أو لسعة مع ألم أو تورم أو أعراض مقلقة"},
+        {"7", "Fractures", "كسور", "moderate", "Pain, swelling, deformity, or inability to move the injured part", "ألم أو تورم أو تشوه أو عدم القدرة على تحريك الجزء المصاب"},
+        {"8", "Minor cuts and scrapes", "جروح وخدوش بسيطة", "minor", "A small cut or graze with light bleeding", "جرح صغير أو خدش مع نزيف خفيف"}
     };
 
+    /** خطوات الإسعاف لكل حالة بالترتيب نفسه لمصفوفة SEED_CASES؛ لكل خطوة نص إنجليزي وعربي. */
     private static final String[][][] SEED_STEPS = {
         {
             {"Press firmly on the wound with a clean cloth or dressing.", "اضغط بقوة على الجرح بقطعة قماش أو ضماد نظيف."},
@@ -60,23 +69,41 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         },
         {
             {"Keep the person calm and as still as possible and immobilize the bitten limb.", "حافظ على هدوء المصاب وثباته قدر الإمكان وثبّت الطرف الملدوغ."},
-            {"Remove tight clothing or jewelry near the bite before swelling starts.", "أزل الملابس أو الحلي الضيقة قرب مكان اللدغة قبل بدء التورم."},
-            {"Do not cut the wound or try to suck out the venom; call the local emergency number.", "لا تجرح مكان اللدغة ولا تحاول امتصاص السم، واتصل برقم الطوارئ المحلي."}
+            {"Do not cut the wound or try to suck out the venom.", "لا تجرح مكان اللدغة ولا تحاول مص السم."},
+            {"Remove tight clothing or jewelry near the bite and call the local emergency number.", "أزل الملابس أو الحلي الضيقة قرب مكان اللدغة واتصل برقم الطوارئ المحلي."}
+        },
+        {
+            {"Keep the injured part still and support it in the position you found it; do not try to straighten it.", "أبقِ الجزء المصاب ثابتاً وادعمه بالوضعية التي وجدته عليها، ولا تحاول تقويمه."},
+            {"Cover any open wound with a clean dressing and apply a wrapped cold pack to reduce swelling.", "غطِّ أي جرح مفتوح بضماد نظيف وضع كمادة باردة ملفوفة بقماش لتخفيف التورم."},
+            {"Call the local emergency number for an open fracture or a suspected neck, back, hip, or thigh fracture; otherwise seek medical care.", "اتصل برقم الطوارئ المحلي عند وجود كسر مفتوح أو اشتباه بكسر في الرقبة أو الظهر أو الحوض أو الفخذ، وإلا فاطلب الرعاية الطبية."}
+        },
+        {
+            {"Wash your hands, then rinse the wound with clean running water.", "اغسل يديك ثم اغسل الجرح بماء جارٍ نظيف."},
+            {"Press gently with a clean cloth or gauze until the bleeding stops.", "اضغط برفق بقطعة قماش أو شاش نظيف حتى يتوقف النزيف."},
+            {"Cover the wound with a sterile dressing or plaster and seek medical care if signs of infection appear.", "غطِّ الجرح بضماد معقّم أو لاصقة طبية، واطلب الرعاية الطبية إذا ظهرت علامات التهاب."}
         }
     };
 
+    /** تعبير ترتيب حسب الخطورة: حرج ثم متوسط ثم طفيف ثم غير محدد. يُستخدم في البحث والإحصاءات. */
+    private static final String SEVERITY_ORDER = "CASE danger_level WHEN 'critical' THEN 0 WHEN 'moderate' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END";
+
+    /** أرقام الطوارئ العامة الافتراضية (الاسم مفتاح ترجمة)، ولا يمكن تعديلها أو حذفها. */
     private static final String[][] SEED_PRESET_CONTACTS = {
         {"police", "112"},
         {"ambulance", "110"},
         {"fire", "113"}
     };
 
+    /** المُنشئ: يحدد اسم القاعدة وإصدارها، ثم ينسخ القاعدة الجاهزة من assets إن لم تكن موجودة. */
     public DatabaseHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
         copyDatabaseFromAssets(context);
     }
 
-    /** Copies the pre-populated database from assets/ on first launch. */
+    /**
+     * تنسخ القاعدة الجاهزة من assets/databases إلى مسار قواعد بيانات التطبيق عند أول تشغيل فقط.
+     * عند الفشل تحذف أي ملف ناقص، فيُنشئ onCreate القاعدة من البيانات الاحتياطية.
+     */
     private void copyDatabaseFromAssets(Context context) {
         File target = context.getDatabasePath(DB_NAME);
         if (target.exists()) return;
@@ -89,70 +116,88 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
             out.flush();
         } catch (IOException e) {
-            // Asset missing or unreadable: fall back to the in-code seed in onCreate().
             if (target.exists()) target.delete();
         }
     }
 
+    /** تُستدعى عند كل فتح للقاعدة: تفعّل قيود المفاتيح الأجنبية (FOREIGN KEY). */
     @Override public void onConfigure(SQLiteDatabase db) {
         super.onConfigure(db);
         db.setForeignKeyConstraintsEnabled(true);
     }
 
+    /** تُستدعى فقط إذا لم توجد قاعدة: تنشئ الجداول الأربعة والفهارس، تملأ البيانات، ثم تبني فهرس البحث. */
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE emergencies (case_id INTEGER PRIMARY KEY, title_en TEXT NOT NULL, title_ar TEXT NOT NULL, danger_level TEXT NOT NULL CHECK(danger_level IN ('critical','moderate','minor')), symptoms_en TEXT NOT NULL, symptoms_ar TEXT NOT NULL)");
         db.execSQL("CREATE TABLE steps (step_id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL, step_number INTEGER NOT NULL, instruction_en TEXT NOT NULL, instruction_ar TEXT NOT NULL, FOREIGN KEY(case_id) REFERENCES emergencies(case_id) ON DELETE CASCADE, UNIQUE(case_id, step_number))");
         db.execSQL("CREATE TABLE custom_contacts (contact_id INTEGER PRIMARY KEY AUTOINCREMENT, contact_name TEXT NOT NULL, phone_number TEXT NOT NULL, preset INTEGER NOT NULL DEFAULT 0)");
-        db.execSQL("CREATE TABLE treated_cases (record_id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL, event_date TEXT NOT NULL, photo_uri TEXT, procedures TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')))");
+        db.execSQL("CREATE TABLE treated_cases (record_id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL, event_date TEXT NOT NULL, photo_path TEXT, procedures TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')), case_id INTEGER REFERENCES emergencies(case_id) ON DELETE SET NULL)");
         db.execSQL("CREATE INDEX idx_emergency_severity ON emergencies(danger_level)");
         db.execSQL("CREATE INDEX idx_treated_date ON treated_cases(event_date)");
-        rebuildFts(db);
+        db.execSQL("CREATE INDEX idx_treated_case ON treated_cases(case_id)");
         seed(db);
+        rebuildFts(db);
     }
 
+    /**
+     * ترحّل قاعدة إصدار قديم إلى الإصدار الحالي خطوة بخطوة دون حذف بيانات المستخدم:
+     * v2 عمود preset، v5 حفظ الصورة كملف وربط السجل بنوع الحالة، v6 تحديث المحتوى وإعادة بناء فهرس البحث.
+     */
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             try { db.execSQL("ALTER TABLE custom_contacts ADD COLUMN preset INTEGER NOT NULL DEFAULT 0"); } catch (SQLException ignored) { }
             seedPresetContacts(db);
         }
-        if (oldVersion < 3) rebuildFts(db);
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE treated_cases RENAME COLUMN photo_uri TO photo_path");
+            db.execSQL("ALTER TABLE treated_cases ADD COLUMN case_id INTEGER REFERENCES emergencies(case_id) ON DELETE SET NULL");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_treated_case ON treated_cases(case_id)");
+        }
+        if (oldVersion < 6) {
+            seedEmergencyContent(db);
+            rebuildFts(db);
+        }
     }
 
-    /** (Re)creates the FTS4 index over bilingual titles and symptoms. No-op-safe when the device SQLite lacks FTS4. */
+    /**
+     * تحذف وتعيد إنشاء جدول البحث النصي FTS4 وتملؤه من جدول الحالات.
+     * إذا لم يدعم الجهاز FTS4 يُتجاهل الخطأ ويعمل البحث بـ LIKE فقط.
+     */
     private void rebuildFts(SQLiteDatabase db) {
         try {
             db.execSQL("DROP TABLE IF EXISTS emergencies_fts4");
             db.execSQL("CREATE VIRTUAL TABLE emergencies_fts4 USING fts4(title_en, title_ar, symptoms_en, symptoms_ar, tokenize=unicode61)");
             db.execSQL("INSERT INTO emergencies_fts4(docid, title_en, title_ar, symptoms_en, symptoms_ar) SELECT case_id, title_en, title_ar, symptoms_en, symptoms_ar FROM emergencies");
         } catch (SQLiteException e) {
-            // FTS4 unavailable on this device: search() falls back to LIKE-only.
         }
     }
 
+    /** تملأ القاعدة الجديدة بالحالات وخطواتها وبأرقام الطوارئ العامة. */
     private void seed(SQLiteDatabase db) {
+        seedEmergencyContent(db);
+        seedPresetContacts(db);
+    }
+
+    /**
+     * تُدخل الحالات بأمر UPSERT: الحالة الجديدة تُضاف، والموجودة يُحدَّث نصها دون حذفها فلا تنقطع روابط السجلات بها.
+     * الخطوات تُستبدل حسب المفتاح الفريد (case_id, step_number).
+     */
+    private void seedEmergencyContent(SQLiteDatabase db) {
         for (int i = 0; i < SEED_CASES.length; i++) {
             String[] c = SEED_CASES[i];
-            ContentValues v = new ContentValues();
-            v.put("case_id", Long.parseLong(c[0])); v.put("title_en", c[1]); v.put("title_ar", c[2]);
-            v.put("danger_level", c[3]); v.put("symptoms_en", c[4]); v.put("symptoms_ar", c[5]);
-            db.insertOrThrow("emergencies", null, v);
-            try {
-                ContentValues fts = new ContentValues();
-                fts.put("title_en", c[1]); fts.put("title_ar", c[2]); fts.put("symptoms_en", c[4]); fts.put("symptoms_ar", c[5]);
-                db.insert("emergencies_fts4", null, fts);
-            } catch (SQLiteException e) {
-                // Device SQLite without FTS4: search falls back to LIKE-only.
-            }
+            db.execSQL("INSERT INTO emergencies(case_id,title_en,title_ar,danger_level,symptoms_en,symptoms_ar) VALUES (?,?,?,?,?,?) "
+                    + "ON CONFLICT(case_id) DO UPDATE SET title_en=excluded.title_en, title_ar=excluded.title_ar, danger_level=excluded.danger_level, symptoms_en=excluded.symptoms_en, symptoms_ar=excluded.symptoms_ar",
+                    new Object[]{Long.parseLong(c[0]), c[1], c[2], c[3], c[4], c[5]});
             String[][] steps = SEED_STEPS[i];
             for (int s = 0; s < steps.length; s++) {
                 ContentValues step = new ContentValues(); step.put("case_id", Long.parseLong(c[0]));
                 step.put("step_number", s + 1); step.put("instruction_en", steps[s][0]); step.put("instruction_ar", steps[s][1]);
-                db.insertOrThrow("steps", null, step);
+                db.insertWithOnConflict("steps", null, step, SQLiteDatabase.CONFLICT_REPLACE);
             }
         }
-        seedPresetContacts(db);
     }
 
+    /** تضيف أرقام الطوارئ العامة مع preset = 1. */
     private void seedPresetContacts(SQLiteDatabase db) {
         for (String[] p : SEED_PRESET_CONTACTS) {
             ContentValues v = new ContentValues();
@@ -161,11 +206,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    /** Searches with an FTS MATCH prefix query plus LIKE fallbacks for partial, offline-friendly results. */
+    /**
+     * البحث الفوري: النص الفارغ يعيد كل الحالات، وإلا يُجمع MATCH (فهرس FTS4 لبدايات الكلمات)
+     * مع LIKE (أي جزء من الكلمة) على العناوين والأعراض باللغتين، والنتائج مرتبة حسب الخطورة.
+     * إذا فشل FTS على الجهاز يُعاد البحث بـ LIKE فقط حتى لا ينهار التطبيق.
+     */
     public Cursor searchEmergencies(String query) {
         SQLiteDatabase db = getReadableDatabase();
         String q = query == null ? "" : query.trim();
-        String order = " ORDER BY CASE danger_level WHEN 'critical' THEN 0 WHEN 'moderate' THEN 1 ELSE 2 END, title_en";
+        String order = " ORDER BY " + SEVERITY_ORDER + ", title_en";
         String base = "SELECT case_id,title_en,title_ar,danger_level,symptoms_en,symptoms_ar FROM emergencies";
         if (q.isEmpty()) return db.rawQuery(base + order, null);
         String pattern = likePattern(q);
@@ -178,12 +227,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             if (match != null) return db.rawQuery(sql, new String[]{match, pattern, pattern, pattern, pattern});
             return db.rawQuery(sql, new String[]{pattern, pattern, pattern, pattern});
         } catch (SQLiteException e) {
-            // Device SQLite without FTS (or an un-migrated database): LIKE-only search.
             return db.rawQuery(base + " WHERE " + likeClause + order, new String[]{pattern, pattern, pattern, pattern});
         }
     }
 
-    /** Builds an FTS prefix expression like "snake* bite*"; returns null when the query is not FTS-safe. */
+    /**
+     * تحوّل نص البحث إلى تعبير FTS ببادئة لكل كلمة (sna ins ← sna* ins*).
+     * تعيد null إذا احتوى النص رموزاً غير آمنة لـ FTS.
+     */
     private String buildMatchExpression(String q) {
         if (!q.matches("[\\p{L}\\p{N}][\\p{L}\\p{N}\\s]*")) return null;
         String[] tokens = q.split("\\s+");
@@ -195,19 +246,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return sb.toString();
     }
 
-    /** Wraps a query in LIKE wildcards, escaping %, _ and \ so they match literally. */
+    /** تحيط النص بـ %...% وتهرّب المحارف % و _ و \ حتى تُعامل كنص عادي وليس كرموز بحث. */
     private static String likePattern(String q) {
         return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
     }
 
+    /** تجلب حالة واحدة برقمها: العنوان والخطورة والأعراض باللغتين. */
     public Cursor getEmergency(long id) {
         return getReadableDatabase().rawQuery("SELECT case_id,title_en,title_ar,danger_level,symptoms_en,symptoms_ar FROM emergencies WHERE case_id=?", new String[]{String.valueOf(id)});
     }
 
+    /** تجلب خطوات الحالة مرتبة حسب رقم الخطوة. */
     public Cursor getSteps(long caseId) {
         return getReadableDatabase().rawQuery("SELECT step_number,instruction_en,instruction_ar FROM steps WHERE case_id=? ORDER BY step_number", new String[]{String.valueOf(caseId)});
     }
 
+    /**
+     * تضيف رقماً جديداً إذا كان id سالباً، وإلا تعدّله. الأرقام العامة محمية بالشرط preset = 0.
+     * تعيد رقم السجل، أو -1 عند الفشل.
+     */
     public long saveContact(long id, String name, String phone) {
         ContentValues v = new ContentValues(); v.put("contact_name", name.trim()); v.put("phone_number", phone.trim());
         SQLiteDatabase db = getWritableDatabase();
@@ -215,24 +272,58 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return db.update("custom_contacts", v, "contact_id=? AND preset=0", new String[]{String.valueOf(id)}) > 0 ? id : -1;
     }
 
+    /** تجلب كل الأرقام: العامة أولاً ثم أرقام المستخدم أبجدياً. */
     public Cursor getContacts() { return getReadableDatabase().rawQuery("SELECT contact_id,contact_name,phone_number,preset FROM custom_contacts ORDER BY preset DESC, contact_name COLLATE NOCASE", null); }
+    /** تحذف رقماً أضافه المستخدم (الأرقام العامة لا تُحذف). */
     public int deleteContact(long id) { return getWritableDatabase().delete("custom_contacts", "contact_id=? AND preset=0", new String[]{String.valueOf(id)}); }
 
-    public long addTreatedCase(String description, String date, String photoUri, String procedures) {
+    /**
+     * تضيف سجل حالة معالجة (id سالب) أو تعدّله.
+     * caseId نوع الحالة الإسعافية وقد يكون null، و photoPath اسم ملف الصورة داخل التطبيق.
+     */
+    public long saveTreatedCase(long id, Long caseId, String description, String date, String photoPath, String procedures) {
         ContentValues v = new ContentValues(); v.put("description", description.trim()); v.put("event_date", date.trim());
-        v.put("photo_uri", photoUri); v.put("procedures", procedures.trim());
-        return getWritableDatabase().insert("treated_cases", null, v);
+        v.put("photo_path", photoPath); v.put("procedures", procedures.trim());
+        if (caseId == null) v.putNull("case_id"); else v.put("case_id", caseId);
+        SQLiteDatabase db = getWritableDatabase();
+        if (id < 0) return db.insert("treated_cases", null, v);
+        return db.update("treated_cases", v, "record_id=?", new String[]{String.valueOf(id)}) > 0 ? id : -1;
     }
 
+    /** بداية استعلام السجل مع LEFT JOIN على جدول الحالات لجلب عنوان الحالة المرتبطة وخطورتها. */
+    private static final String TREATED_COLUMNS = "SELECT t.record_id,t.description,t.event_date,t.photo_path,t.procedures,t.case_id,e.title_en,e.title_ar,e.danger_level FROM treated_cases t LEFT JOIN emergencies e ON e.case_id=t.case_id";
+
+    /** تجلب سجل حالة معالجة واحداً مع بيانات الحالة المرتبطة. */
+    public Cursor getTreatedCase(long id) {
+        return getReadableDatabase().rawQuery(TREATED_COLUMNS + " WHERE t.record_id=?", new String[]{String.valueOf(id)});
+    }
+
+    /** تجلب السجلات من الأحدث للأقدم، مع بحث في الوصف والإجراءات والتاريخ وعنوان الحالة. */
     public Cursor getTreatedCases(String query) {
         String q = query == null ? "" : query.trim();
-        String sql = "SELECT record_id,description,event_date,photo_uri,procedures FROM treated_cases";
-        if (!q.isEmpty()) sql += " WHERE description LIKE ? ESCAPE '\\' OR procedures LIKE ? ESCAPE '\\' OR event_date LIKE ? ESCAPE '\\'";
-        sql += " ORDER BY event_date DESC, record_id DESC";
+        String sql = TREATED_COLUMNS;
+        if (!q.isEmpty()) sql += " WHERE t.description LIKE ? ESCAPE '\\' OR t.procedures LIKE ? ESCAPE '\\' OR t.event_date LIKE ? ESCAPE '\\' OR e.title_en LIKE ? ESCAPE '\\' OR e.title_ar LIKE ? ESCAPE '\\'";
+        sql += " ORDER BY t.event_date DESC, t.record_id DESC";
         if (q.isEmpty()) return getReadableDatabase().rawQuery(sql, null);
         String pattern = likePattern(q);
-        return getReadableDatabase().rawQuery(sql, new String[]{pattern, pattern, pattern});
+        return getReadableDatabase().rawQuery(sql, new String[]{pattern, pattern, pattern, pattern, pattern});
     }
 
+    /** تحذف سجل حالة معالجة. */
     public int deleteTreatedCase(long id) { return getWritableDatabase().delete("treated_cases", "record_id=?", new String[]{String.valueOf(id)}); }
+
+    /** إحصاء: عدد حالات الدليل لكل مستوى خطورة (GROUP BY + COUNT + ORDER BY). */
+    public Cursor countEmergenciesBySeverity() {
+        return getReadableDatabase().rawQuery("SELECT danger_level, COUNT(*) FROM emergencies GROUP BY danger_level ORDER BY " + SEVERITY_ORDER, null);
+    }
+
+    /** إحصاء: عدد الحالات المعالجة لكل مستوى خطورة؛ السجل غير المرتبط بحالة يُحسب unspecified. */
+    public Cursor countTreatedBySeverity() {
+        return getReadableDatabase().rawQuery("SELECT COALESCE(e.danger_level,'unspecified') AS danger_level, COUNT(*) FROM treated_cases t LEFT JOIN emergencies e ON e.case_id=t.case_id GROUP BY 1 ORDER BY " + SEVERITY_ORDER, null);
+    }
+
+    /** إحصاء: عدد الحالات المعالجة في كل شهر (آخر ستة أشهر فيها سجلات). */
+    public Cursor countTreatedByMonth() {
+        return getReadableDatabase().rawQuery("SELECT substr(event_date,1,7) AS month, COUNT(*) FROM treated_cases GROUP BY month ORDER BY month DESC LIMIT 6", null);
+    }
 }

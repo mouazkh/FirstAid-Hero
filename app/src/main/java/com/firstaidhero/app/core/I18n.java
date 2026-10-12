@@ -1,10 +1,16 @@
 package com.firstaidhero.app.core;
 
-import android.content.Context;
+import android.content.Context;  // سياق التطبيق للوصول إلى الموارد والملفات وقواعد البيانات
 
-/** Bilingual UI copy; Android's Noto Arabic UI fallback is selected for Arabic text. */
+/** فئة الترجمة: كل نصوص الواجهة باللغتين العربية والإنجليزية في مكان واحد. */
 public final class I18n {
+    /** مُنشئ خاص يمنع إنشاء كائن من الفئة. */
     private I18n() { }
+    /**
+     * تعيد النص المقابل للمفتاح باللغة الحالية.
+     * إذا لم يوجد المفتاح تعيد المفتاح نفسه بدل أن ينهار التطبيق.
+     * تُستخدم أيضاً لترجمة أسماء أرقام الطوارئ العامة المخزنة (police, ambulance, fire).
+     */
     public static String t(Context c, String key) {
         boolean ar = AppPreferences.isArabic(c);
         switch (key) {
@@ -34,9 +40,18 @@ public final class I18n {
             case "contacts_permission_body": return ar ? "نحتاج إذنك لقراءة جهات الاتصال واختيار رقم طوارئ منها. تبقى جميع البيانات على جهازك." : "Allow access to pick an emergency number from your device contacts. All data stays on your device.";
             case "contacts_denied": return ar ? "لم يُمنح الإذن. يمكنك الاختيار من تطبيق جهات الاتصال أو إدخال الرقم يدوياً." : "Permission not granted. You can pick from the Contacts app or type the number manually.";
             case "records": return ar ? "سجل الحالات" : "Case history";
+            case "stats": return ar ? "الإحصاءات" : "Statistics";
+            case "stats_sub": return ar ? "تصنيف الحالات حسب الخطورة وسجل الحالات المعالجة حسب التاريخ." : "Cases grouped by severity, and treated cases over time.";
+            case "stats_guide": return ar ? "حالات الدليل حسب الخطورة" : "Guide cases by severity";
+            case "stats_treated": return ar ? "الحالات المعالجة حسب الخطورة" : "Treated cases by severity";
+            case "stats_months": return ar ? "الحالات المعالجة حسب الشهر" : "Treated cases by month";
+            case "total": return ar ? "المجموع" : "Total";
+            case "no_data": return ar ? "لا توجد بيانات بعد." : "No data yet.";
+            case "severity_unspecified": return ar ? "غير محدد" : "Unspecified";
             case "settings": return ar ? "الإعدادات" : "Settings";
             case "tab_home": return ar ? "الرئيسية" : "Home";
             case "tab_records": return ar ? "السجل" : "Records";
+            case "tab_stats": return ar ? "الإحصاءات" : "Stats";
             case "tab_contacts": return ar ? "الاتصال" : "Contacts";
             case "tab_settings": return ar ? "الإعدادات" : "Settings";
             case "offline": return ar ? "المحتوى متاح دون إنترنت" : "Available offline";
@@ -67,10 +82,28 @@ public final class I18n {
             case "date": return ar ? "التاريخ (YYYY-MM-DD)" : "Date (YYYY-MM-DD)";
             case "procedures": return ar ? "الإجراءات التي تمت" : "Actions performed";
             case "photo": return ar ? "اختيار صورة" : "Choose photo";
+            case "photo_label": return ar ? "صورة الحالة" : "Case photo";
+            case "change_photo": return ar ? "تغيير الصورة" : "Change photo";
+            case "remove_photo": return ar ? "إزالة الصورة" : "Remove photo";
+            case "no_photo": return ar ? "لم تتم إضافة صورة (اختياري)." : "No photo added (optional).";
+            case "photo_processing": return ar ? "جارٍ حفظ الصورة..." : "Saving photo...";
+            case "photo_error": return ar ? "تعذر قراءة الصورة المختارة. جرّب صورة أخرى." : "Could not read that image. Try another photo.";
+            case "photo_missing": return ar ? "الصورة المحفوظة غير متاحة." : "The saved photo is no longer available.";
+            case "emergency_type": return ar ? "نوع الحالة الإسعافية" : "Emergency type";
+            case "not_specified": return ar ? "غير محدد" : "Not specified";
+            case "edit_record": return ar ? "تعديل الحالة المعالجة" : "Edit treated case";
+            case "log_case": return ar ? "تسجيل هذه الحالة كمعالجة" : "Log this as a treated case";
+            case "search_records": return ar ? "ابحث في الحالات المعالجة..." : "Search treated cases";
+            case "field_required": return ar ? "هذا الحقل مطلوب." : "This field is required.";
+            case "call_emergency": return ar ? "اتصال سريع بأرقام الطوارئ" : "Call an emergency number";
+            case "manage_contacts": return ar ? "إدارة الأرقام" : "Manage numbers";
+            case "no_dialer": return ar ? "لا يوجد تطبيق اتصال على هذا الجهاز." : "No phone app is available on this device.";
+            case "invalid_phone": return ar ? "أدخل رقم هاتف صحيحاً (3 أرقام على الأقل، ويُسمح بـ + ( ) - والمسافة)." : "Enter a valid phone number (at least 3 digits; + ( ) - and spaces allowed).";
+            case "date_future": return ar ? "لا يمكن أن يكون التاريخ في المستقبل." : "The date cannot be in the future.";
+            case "save_failed": return ar ? "تعذر الحفظ. حاول مرة أخرى." : "Could not save. Please try again.";
             case "empty_records": return ar ? "لا توجد حالات مسجلة بعد." : "No treated cases recorded yet.";
             case "call": return ar ? "اتصال" : "Call";
             case "edit": return ar ? "تعديل" : "Edit";
-            case "open_contacts": return ar ? "أرقام الطوارئ" : "Emergency contacts";
             case "open_records": return ar ? "تسجيل حالة معالجة" : "Log a treated case";
             case "police": return ar ? "الشرطة" : "Police";
             case "fire": return ar ? "الإطفاء" : "Fire";

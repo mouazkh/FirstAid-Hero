@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ميزة الاتصال غير إلزامية حتى يعمل التطبيق على الأجهزة اللوحية أيضاً -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <!-- قراءة جهات اتصال الجهاز لاختيار رقم طوارئ منها -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- الاتصال المباشر من التطبيق (عند الرفض تُفتح لوحة الاتصال) -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- لا توجد صلاحية INTERNET: التطبيق يعمل دون إنترنت بالكامل -->
 
+    <!-- التطبيق وشاشاته؛ SplashActivity هي شاشة الإقلاع -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -16,6 +23,8 @@
         <activity android:name=".ui.screens.EmergencyDetailActivity" android:exported="false" />
         <activity android:name=".ui.screens.ContactsActivity" android:exported="false" />
         <activity android:name=".ui.screens.TreatedCasesActivity" android:exported="false" />
+        <activity android:name=".ui.screens.TreatedCaseFormActivity" android:exported="false" />
+        <activity android:name=".ui.screens.StatisticsActivity" android:exported="false" />
         <activity android:name=".ui.screens.MainActivity" android:exported="false" />
         <activity android:name=".ui.screens.SplashActivity" android:exported="true">
             <intent-filter>

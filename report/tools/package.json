@@ -1,0 +1,7 @@
+{
+  "name": "firstaid-hero-report",
+  "private": true,
+  "description": "Builds the Arabic Word report from ../REPORT_SOURCE_AR.md",
+  "scripts": { "build": "node build_report.js" },
+  "dependencies": { "docx": "9.5.1" }
+}

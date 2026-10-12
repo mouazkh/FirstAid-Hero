@@ -1,21 +1,25 @@
 package com.firstaidhero.app.ui.screens;
 
-import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.LinearLayout;
-import android.widget.Spinner;
-import android.widget.TextView;
-import androidx.appcompat.app.AppCompatDelegate;
-import com.firstaidhero.app.core.AppPreferences;
-import com.firstaidhero.app.core.I18n;
-import com.firstaidhero.app.ui.Ui;
+import android.os.Bundle;  // حاوية لحفظ حالة الشاشة وتمرير البيانات بين الشاشات
+import android.view.Gravity;  // محاذاة العناصر والنصوص
+import android.view.View;  // الفئة الأساسية لكل عناصر الواجهة
+import android.widget.AdapterView;  // قوائم تعتمد على Adapter مثل Spinner
+import android.widget.ArrayAdapter;  // ربط مصفوفة نصوص بقائمة منسدلة
+import android.widget.LinearLayout;  // حاوية ترتب العناصر عمودياً أو أفقياً
+import android.widget.Spinner;  // قائمة منسدلة
+import android.widget.TextView;  // عرض نص
+import androidx.appcompat.app.AppCompatDelegate;  // تطبيق الوضع الفاتح أو الداكن على التطبيق
+import com.firstaidhero.app.core.AppPreferences;  // إعدادات التطبيق المحفوظة (اللغة، المظهر)
+import com.firstaidhero.app.core.I18n;  // نصوص الواجهة بالعربية والإنجليزية
+import com.firstaidhero.app.ui.Ui;  // نظام التصميم المشترك (ألوان، نصوص، أزرار)
 
+/** شاشة الإعدادات: اختيار اللغة (العربية/English) والمظهر (حسب الجهاز/فاتح/داكن). */
 public class SettingsActivity extends BaseActivity {
+    /** يمنع تنفيذ الاختيار عند البناء الأول للقوائم المنسدلة. */
     private boolean ready;
+    /** تبني الشاشة. */
     @Override protected void onCreate(Bundle state) { super.onCreate(state); render(); }
+    /** تبني قائمتي اللغة والمظهر؛ تغيير اللغة يعيد بناء الشاشة، وتغيير المظهر يُطبَّق فوراً. */
     private void render() {
         ready = false;
         LinearLayout content = Ui.column(this); Ui.addSectionHeader(this, content, I18n.t(this, "settings"), I18n.t(this, "settings_hint"));
@@ -40,6 +44,7 @@ public class SettingsActivity extends BaseActivity {
         AppPreferences.applyDirection(this, content); setContentView(Ui.screen(this, Ui.scroll(this, content), "settings"));
         content.post(() -> ready = true);
     }
+    /** تضيف صفاً فيه عنوان وقائمة منسدلة وتستدعي المستمع عند تغيير الاختيار. */
     private void addDropdownRow(LinearLayout parent, String titleKey, String[] options, int selected, SelectionListener listener) {
         LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setOrientation(LinearLayout.VERTICAL); row.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 12));
         TextView title = Ui.text(this, I18n.t(this, titleKey), 15, Ui.ink(this), true); row.addView(title);
@@ -48,10 +53,13 @@ public class SettingsActivity extends BaseActivity {
         spinner.setBackground(Ui.rounded(this, Ui.background(this), Ui.border(this), 13, 1));
         LinearLayout.LayoutParams sp = Ui.lp(this, -1, 48); sp.topMargin = Ui.dp(this, 8); row.addView(spinner, sp);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            /** عند اختيار عنصر: تنفيذ التغيير إذا كانت الشاشة جاهزة. */
             @Override public void onItemSelected(AdapterView<?> parentView, View view, int position, long id) { if (ready) listener.onSelected(position); }
+            /** عند عدم اختيار شيء: لا شيء. */
             @Override public void onNothingSelected(AdapterView<?> parentView) { }
         });
         parent.addView(row, Ui.lp(this, -1, -2));
     }
+    /** واجهة بسيطة لاستقبال رقم العنصر المختار. */
     private interface SelectionListener { void onSelected(int position); }
 }

@@ -1,5 +1,13 @@
 # FirstAid Hero — App Structure
 
+## Technology
+
+- Android Studio project in **Java**, application ID `com.firstaidhero.app`.
+- `minSdk 30` (Android 11), `targetSdk 36`, Java 11.
+- Local **SQLite** only. No internet permission and no server.
+- Libraries: AndroidX AppCompat, AndroidX Activity, Material Components (bottom navigation). ConstraintLayout is declared by the template but not used.
+- Every class, method and imported library has an Arabic comment in the source.
+
 ## Java packages
 
 ```text
@@ -8,53 +16,74 @@ com.firstaidhero.app
 │   ├── AppPreferences.java       # SharedPreferences: onboarding, language, theme
 │   └── I18n.java                 # English/Arabic UI strings
 ├── data/
-│   ├── DatabaseHelper.java       # SQLite schema, assets copy, FTS5 + LIKE search, CRUD
-│   └── DeviceContacts.java       # Reads device contacts for the picker
+│   ├── DatabaseHelper.java       # Schema, asset copy, migrations, FTS4 + LIKE search, CRUD, statistics
+│   ├── DeviceContacts.java       # Reads device contacts for the picker
+│   └── PhotoStore.java           # Copies treated-case photos into app storage, loads thumbnails
 └── ui/
-    ├── Ui.java                   # Shared design system, dark-aware components, Material bottom navigation
+    ├── Ui.java                   # Shared design system and bottom navigation
     └── screens/
-        ├── BaseActivity.java     # Applies saved theme and refreshes changed language
+        ├── BaseActivity.java             # Theme, language refresh, direct calling
         ├── SplashActivity.java
         ├── OnboardingActivity.java
-        ├── MainActivity.java
-        ├── EmergencyDetailActivity.java
-        ├── ContactsActivity.java
-        ├── TreatedCasesActivity.java
+        ├── MainActivity.java             # Dashboard / search
+        ├── EmergencyDetailActivity.java  # Action steps + quick-call bar
+        ├── ContactsActivity.java         # Emergency dialer
+        ├── TreatedCasesActivity.java     # Treated-case history
+        ├── TreatedCaseFormActivity.java  # Treated-case entry / edit
+        ├── StatisticsActivity.java       # Severity statistics
         └── SettingsActivity.java
 ```
 
-Screen layouts are currently assembled in Java. Shared preference, language copy, palette, data access, model, and screen responsibilities are separated into packages.
+Screens are built in Java through the shared `Ui` helpers rather than XML layouts. Lists are built directly from database cursors; the data set is small, so the app does not use RecyclerView adapters or ViewModels.
 
 ## Launch and first-run behavior
 
-1. `SplashActivity` is the manifest launcher and shows the branded splash briefly.
-2. It reads `onboarding_done` from `firstaid_hero_preferences`.
-3. If the value is absent/false, the app opens three onboarding pages. **Skip** and **Get started** both mark onboarding complete and continue to the dashboard.
-4. Later launches go from splash directly to `MainActivity`.
-5. Onboarding completion, language, and appearance are separate preferences. Language is saved as `en` or `ar`. Theme is saved as `system`, `light`, or `dark`; the default is `system` when no theme choice has been saved.
+1. `SplashActivity` is the launcher. It shows the brand for 650 ms.
+2. On first launch it opens `OnboardingActivity` (three pages, Skip / Next). Finishing or skipping saves `onboarding_done`.
+3. Later launches go straight to `MainActivity`.
+4. Language (`en`/`ar`) and theme (`system`/`light`/`dark`) are saved separately. The default theme follows the system.
 
 ## Screens and navigation
 
-- **Dashboard:** offline emergency search (FTS5 `MATCH` prefix + `LIKE` fallbacks) and clear case cards.
-- **Emergency details:** bilingual title/symptoms, numbered steps, medical-review notice, and an action to open contacts.
-- **Contacts:** preset emergency numbers (police, ambulance, fire) plus user-added contacts; calling opens the Android dialer with `ACTION_DIAL`. Preset numbers cannot be edited or deleted. New contacts can be typed manually or picked from the device contacts (in-app list with `READ_CONTACTS`, falling back to the system contacts picker if permission is denied — no permission needed for the system picker path).
-- **Treated cases:** add, search, and delete entries with date, description, procedures, and optional photo URI.
-- **Settings:** dropdown menus for English/Arabic and System/Light/Dark. The selected values persist locally; Android System is the initial theme default.
-- A shared four-tab Material `BottomNavigationView` links **Home**, **Records**, **Contacts**, and **Settings**. Emergency details retain the same navigation so the user can switch features without returning to the dashboard first.
+| Screen | What it does |
+|---|---|
+| **Dashboard** (`MainActivity`) | Large search bar; results update on every keystroke (FTS4 `MATCH` + `LIKE`); all cases listed by severity when the field is empty |
+| **Action steps** (`EmergencyDetailActivity`) | Title, severity, symptoms, numbered steps in 19sp text, medical notice, "Log this as a treated case", and a fixed quick-call button at the bottom that lists the stored numbers and calls the chosen one |
+| **Emergency dialer** (`ContactsActivity`) | Public numbers (police, ambulance, fire) plus user numbers with add / edit / delete / call; pick from device contacts. Presets cannot be edited or deleted |
+| **Records** (`TreatedCasesActivity`) | Treated cases newest first with thumbnail, linked emergency and severity, search, edit, delete |
+| **Treated-case form** (`TreatedCaseFormActivity`) | Emergency type, description, date picker, procedures, photo with preview; validation keeps the form open; state survives rotation |
+| **Statistics** (`StatisticsActivity`) | Guide cases by severity, treated cases by severity, treated cases per month (`GROUP BY` / `COUNT` / `ORDER BY`) |
+| **Settings** (`SettingsActivity`) | Language and appearance drop-downs |
+
+A shared five-tab Material `BottomNavigationView` links **Home**, **Records**, **Stats**, **Contacts** and **Settings**. Tabs are activities reused with `FLAG_ACTIVITY_REORDER_TO_FRONT`.
+
+## Calling
+
+`BaseActivity.call(phone)` places a call directly with `ACTION_CALL` when `CALL_PHONE` is granted, asks for the permission otherwise, and falls back to the dialer (`ACTION_DIAL`) if it is refused. Android itself routes official emergency numbers such as 112 to the dialer.
+
+## Photos
+
+`PhotoStore` copies the picked image (system photo picker, no permission needed) into `files/photos/` as a JPEG of at most 1280 px. The database stores only the file name. Thumbnails are decoded at the size needed. Deleting a record or replacing its photo deletes the file.
+
+## Permissions
+
+| Permission | Use | If refused |
+|---|---|---|
+| `READ_CONTACTS` | Pick a number from the device contacts | System contacts picker (no permission needed) |
+| `CALL_PHONE` | Direct calling | Dialer with the number filled in |
+
+`android.hardware.telephony` is declared as not required, so tablets can install the app.
 
 ## Database
 
-- The database ships pre-populated in `assets/databases/firstaid_hero.db` (schema version 3) and is copied to the app's database directory on first launch; if the asset is unavailable, an identical in-code seed runs as a fallback.
-- `emergencies_fts4` is an FTS4 virtual table (`unicode61` tokenizer, works on all stock Android SQLite builds, unlike FTS5) over bilingual titles and symptoms; the search screen combines `MATCH` prefix queries with `LIKE` fallbacks for fast partial-word results, and degrades to LIKE-only if the device SQLite has no FTS module.
+See [`SQLITE_IMPLEMENTATION.md`](SQLITE_IMPLEMENTATION.md). In short: schema version 6, bundled in `assets/databases/firstaid_hero.db` and copied on first launch, with an identical in-code seed as a fallback.
 
 ## UI direction
 
-The refreshed visual system uses high-contrast emergency red, charcoal text, neutral surfaces, rounded cards, consistent spacing, and clearer touch targets. Day and night palettes adapt to the selected theme. Bottom navigation uses a Material `BottomNavigationView` with a four-item menu and matching vector icons. Screens respect the system status bar and navigation bar insets (edge-to-edge) so content never overlaps them.
+High-contrast emergency red, charcoal text and neutral surfaces; rounded cards; large touch targets. Light and dark palettes. Edge-to-edge layout that respects the status and navigation bars. Arabic text uses the system Arabic serif (Noto Naskh) with Arabic locale shaping and right-to-left layout.
 
-Arabic text uses Android’s system Arabic serif/Noto Naskh fallback with Arabic locale shaping; English remains in the sans-serif UI family. Root view direction switches to RTL when Arabic is selected. Arabic translation quality and device-level RTL behavior still need review on an emulator/device.
+## Validation status
 
-## Current limitations and validation
-
-- Core layouts are built programmatically and do not yet have UI/instrumentation tests.
-- The emergency instructions remain generic starter prompts; replace them with locally applicable, medically reviewed content.
-- The database asset is generated by `tools/generate_assets_db.py`; regenerate and rebuild after editing the seed data.
+- All Java sources compile with `javac` against the Android 36 SDK and the project's AndroidX libraries.
+- The latest changes still need a Gradle build and a run on a device or emulator from Android Studio.
+- Emergency instructions are general guidance pending local medical review.

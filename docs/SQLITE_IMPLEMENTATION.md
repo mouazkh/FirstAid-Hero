@@ -1,53 +1,50 @@
 # SQLite Implementation — FirstAid Hero
 
-**Implementation note — 10 October 2026**
-
-This document describes the SQLite layer currently implemented in the Android Studio project. It is intended to be updated as the database design and first-aid content evolve.
+This document describes the SQLite layer as it is implemented now (database **version 6**). The Arabic reference with every method is [`CODE_AND_METHODS_AR.md`](CODE_AND_METHODS_AR.md); the all-in-one Arabic guide is [`FULL_PROJECT_GUIDE_AR.md`](FULL_PROJECT_GUIDE_AR.md).
 
 ## 1. Location and lifecycle
 
-- Database class: `app/src/main/java/com/firstaidhero/app/data/DatabaseHelper.java`
-- Database filename: `firstaid_hero.db`
-- Helper: Android `SQLiteOpenHelper`
-- Schema version: `1`
-- Foreign-key enforcement is enabled in `onConfigure()`.
-- The database is created on the device the first time an activity opens `DatabaseHelper`. `onCreate()` creates the tables, indexes, full-text index, and starter records in a transaction managed by SQLiteOpenHelper.
-- All core reads/writes are local. The current manifest declares no internet permission.
+| Item | Value |
+|---|---|
+| Database class | `app/src/main/java/com/firstaidhero/app/data/DatabaseHelper.java` (extends `SQLiteOpenHelper`) |
+| Database file on the device | `firstaid_hero.db` in the app's private database directory |
+| Bundled pre-populated database | `app/src/main/assets/databases/firstaid_hero.db` |
+| Generator script | `tools/generate_assets_db.py` (run `python tools/generate_assets_db.py`) |
+| Schema version | `6` (`DB_VERSION` in Java, `PRAGMA user_version` in the bundled file) |
+| Foreign keys | Enabled in `onConfigure()` on every open |
+| Network | None. The manifest declares no `INTERNET` permission |
 
-## 2. Schema implemented
+**First launch.** The `DatabaseHelper` constructor calls `copyDatabaseFromAssets()`. If the database file does not exist yet, it copies the bundled file from `assets/databases/` to the app's database path in 8 KB chunks. `SQLiteOpenHelper` then reads `user_version` = 6 from the copied file, finds it equal to `DB_VERSION`, and calls neither `onCreate()` nor `onUpgrade()`. If the copy fails (asset missing or unreadable), any partial file is deleted and `onCreate()` builds the same database from the in-code seed (`SEED_CASES`, `SEED_STEPS`, `SEED_PRESET_CONTACTS`).
+
+## 2. Schema
 
 ### `emergencies`
 
-| Column | Type / rule | Purpose |
-|---|---|---|
-| `case_id` | `INTEGER PRIMARY KEY` | Stable case identifier |
-| `title_en` | `TEXT NOT NULL` | English case title |
-| `title_ar` | `TEXT NOT NULL` | Arabic case title |
-| `danger_level` | `TEXT NOT NULL`, checked against `critical`, `moderate`, `minor` | Severity and statistics grouping |
-| `symptoms_en` | `TEXT NOT NULL` | English summary of common signs |
-| `symptoms_ar` | `TEXT NOT NULL` | Arabic summary of common signs |
+| Column | Type / rule | Purpose | Brief's name |
+|---|---|---|---|
+| `case_id` | `INTEGER PRIMARY KEY` | Case identifier | `case_id` |
+| `title_en`, `title_ar` | `TEXT NOT NULL` | Case title in English and Arabic | `title` |
+| `danger_level` | `TEXT NOT NULL CHECK(danger_level IN ('critical','moderate','minor'))` | Severity | `danger_level` |
+| `symptoms_en`, `symptoms_ar` | `TEXT NOT NULL` | Associated symptoms | `symptoms` |
 
-An index, `idx_emergency_severity`, supports severity grouping/sorting.
+### `steps` (one emergency → many steps)
 
-### `steps`
-
-| Column | Type / rule | Purpose |
-|---|---|---|
-| `step_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Step key |
-| `case_id` | `INTEGER NOT NULL` | Foreign key to `emergencies.case_id`; cascade deletes |
-| `step_number` | `INTEGER NOT NULL` | Display order |
-| `instruction_en` | `TEXT NOT NULL` | English instruction |
-| `instruction_ar` | `TEXT NOT NULL` | Arabic instruction |
-
-`UNIQUE(case_id, step_number)` prevents duplicate step positions within one case. Detail screens sort by `step_number`.
+| Column | Type / rule | Purpose | Brief's name |
+|---|---|---|---|
+| `step_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Step key | `step_id` |
+| `case_id` | `INTEGER NOT NULL`, `FOREIGN KEY → emergencies(case_id) ON DELETE CASCADE` | Owning case | `case_id` |
+| `step_number` | `INTEGER NOT NULL` | Order 1, 2, 3 | `step_number` |
+| `instruction_en`, `instruction_ar` | `TEXT NOT NULL` | Instruction text | `instruction_text` |
+| — | `UNIQUE(case_id, step_number)` | No duplicate positions within a case | — |
 
 ### `custom_contacts`
 
 | Column | Type / rule | Purpose |
 |---|---|---|
 | `contact_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Contact key |
-| `contact_name` | `TEXT NOT NULL` | User-provided name |
-| `phone_number` | `TEXT NOT NULL` | User-provided number |
+| `contact_name` | `TEXT NOT NULL` | Name (for presets, a translation key such as `ambulance`) |
+| `phone_number` | `TEXT NOT NULL` | Number to call |
+| `preset` | `INTEGER NOT NULL DEFAULT 0` | `1` = built-in public number (police 112, ambulance 110, fire 113) that cannot be edited or deleted |
 
 ### `treated_cases`
 
@@ -55,75 +52,139 @@ An index, `idx_emergency_severity`, supports severity grouping/sorting.
 |---|---|---|
 | `record_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Record key |
 | `description` | `TEXT NOT NULL` | Incident description |
-| `event_date` | `TEXT NOT NULL` | Date stored as `YYYY-MM-DD` for sorting |
-| `photo_uri` | `TEXT` | Optional persisted content URI for a selected photo |
-| `procedures` | `TEXT NOT NULL` | Actions recorded by the user |
-| `created_at` | Integer timestamp | Creation time, with SQLite default |
+| `event_date` | `TEXT NOT NULL` | `YYYY-MM-DD`, so text order is date order |
+| `photo_path` | `TEXT` | File name of the photo copied into `files/photos/` by `PhotoStore` |
+| `procedures` | `TEXT NOT NULL` | Actions performed |
+| `created_at` | `INTEGER NOT NULL DEFAULT (strftime('%s','now'))` | Creation timestamp |
+| `case_id` | `INTEGER`, `REFERENCES emergencies(case_id) ON DELETE SET NULL` | Optional link to the emergency that was treated |
 
-`idx_treated_date` supports date-ordered case history.
+### `emergencies_fts4`
 
-### `emergencies_fts`
+FTS4 virtual table with the `unicode61` tokenizer (which handles Arabic) over `title_en`, `title_ar`, `symptoms_en`, `symptoms_ar`. Its `docid` equals `case_id`. It is rebuilt from `emergencies` by `rebuildFts()`. FTS4 was chosen because stock Android SQLite does not include FTS5.
 
-An SQLite **FTS4** virtual table indexes the English/Arabic titles and symptom summaries for `MATCH` searches. Current emergency rows are static starter data; if case editing is added, index maintenance/triggers must be added too.
+### Indexes
 
-## 3. Starter data and important medical-content limitation
+| Index | Purpose |
+|---|---|
+| `idx_emergency_severity` on `emergencies(danger_level)` | Severity grouping and sorting |
+| `idx_treated_date` on `treated_cases(event_date)` | Date-ordered history |
+| `idx_treated_case` on `treated_cases(case_id)` | Join with `emergencies` for the records list and statistics |
 
-Six bilingual emergency categories are inserted from `seed()` when the database is first created: severe bleeding, burns, choking, possible heart attack, drowning/water emergency, and snake/insect bite. The current steps are intentionally **general starter prompts** (prioritize scene safety, contact local emergency services for severe/life-threatening symptoms, and follow the dispatcher). They are **not condition-specific medical instructions**.
+### Relationships
 
-The app displays a notice that these starter instructions need local medical review and that professional help must not be delayed. Before real-world use or final academic submission, replace/expand these steps with verified, locally applicable guidance and record the authoritative sources and review date. Do not present the current generic content as a complete treatment protocol.
+- `emergencies` 1 → N `steps` (required, cascade delete).
+- `emergencies` 1 → N `treated_cases` (optional, set null on delete) so treated cases can be counted by severity.
+- `custom_contacts` is independent.
 
-## 4. Prepopulation approach: current state versus assignment wording
+## 3. Content
 
-The current implementation populates tables from Java in `SQLiteOpenHelper.onCreate()`. It does **not yet ship a prebuilt `.db` file in `assets/` and copy that file to the app’s database path**. The brief specifically describes a pre-populated database bundled in `assets`; if the instructor expects that exact technique, a later step should export a reviewed database, add it under `app/src/main/assets/`, and implement a one-time safe copy plus version/migration handling. This distinction is recorded rather than claiming the asset-copy requirement is already complete.
+Eight bilingual cases, three ordered steps each (24 steps), covering all three severity levels:
 
-## 5. Search and reporting queries
+| # | Case | Severity |
+|---|---|---|
+| 1 | Severe bleeding — نزيف شديد | critical |
+| 2 | Burns — حروق | moderate |
+| 3 | Choking — اختناق | critical |
+| 4 | Possible heart attack — اشتباه نوبة قلبية | critical |
+| 5 | Drowning / water emergency — غرق أو طارئ مائي | critical |
+| 6 | Snake or insect bite — لدغات الأفاعي والحشرات | moderate |
+| 7 | Fractures — كسور | moderate |
+| 8 | Minor cuts and scrapes — جروح وخدوش بسيطة | minor |
 
-### Dynamic `LIKE` search
+The snake-bite steps follow the brief's example order (immobilize the limb, do not suck the venom, then call). The instructions are conservative general guidance; the app shows a medical notice, and the content should be reviewed against local guidance before real-world use.
 
-`searchEmergencies(query)` checks English and Arabic titles and symptoms. It binds the same `%query%` pattern to placeholders rather than concatenating raw user input:
+## 4. Versions and migrations
+
+`onUpgrade()` migrates older installs step by step without deleting user data:
+
+| Version | Change | Migration step |
+|---|---|---|
+| 1 | Initial schema | — |
+| 2 | `preset` column for built-in numbers | `ALTER TABLE custom_contacts ADD COLUMN preset ...` + insert presets |
+| 3 | FTS4 index | Now rebuilt by the v6 step |
+| 4 | Repair of corrupted Arabic text in the bundled file | Now repaired by the v6 UPSERT |
+| 5 | Photo stored as a private file; record linked to a case | `RENAME COLUMN photo_uri TO photo_path`, `ADD COLUMN case_id ...`, create `idx_treated_case` |
+| 6 | Fractures + minor cuts added; snake-bite title and steps updated | `seedEmergencyContent()` (UPSERT cases, REPLACE steps) then `rebuildFts()` |
+
+`seedEmergencyContent()` uses `INSERT ... ON CONFLICT(case_id) DO UPDATE` so existing cases are updated in place instead of being deleted. Deleting them would set `treated_cases.case_id` to NULL and lose the links. Steps use `CONFLICT_REPLACE` on `UNIQUE(case_id, step_number)`.
+
+## 5. Queries
+
+### Instant search (`searchEmergencies`)
 
 ```sql
 SELECT case_id, title_en, title_ar, danger_level, symptoms_en, symptoms_ar
 FROM emergencies
-WHERE title_en LIKE ? OR title_ar LIKE ?
-   OR symptoms_en LIKE ? OR symptoms_ar LIKE ?
-ORDER BY CASE danger_level
-    WHEN 'critical' THEN 0
-    WHEN 'moderate' THEN 1
-    ELSE 2
-END, title_en;
+WHERE case_id IN (SELECT docid FROM emergencies_fts4 WHERE emergencies_fts4 MATCH ?)
+   OR title_en LIKE ? ESCAPE '\' OR title_ar LIKE ? ESCAPE '\'
+   OR symptoms_en LIKE ? ESCAPE '\' OR symptoms_ar LIKE ? ESCAPE '\'
+ORDER BY CASE danger_level WHEN 'critical' THEN 0 WHEN 'moderate' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END, title_en;
 ```
 
-### Full-text `MATCH` search
+- The MATCH argument is built by `buildMatchExpression()`: one prefix term per word (`sna ins` → `sna* ins*`). It is skipped when the input contains characters that are not safe in an FTS expression.
+- The LIKE argument is built by `likePattern()`: `%query%` with `%`, `_` and `\` escaped.
+- Empty input returns every case in severity order. If the FTS query throws (device without FTS4), the same search runs with LIKE only.
+- All values are bound with `?` placeholders.
 
-`searchEmergenciesFullText(query)` queries `emergencies_fts` with FTS4 `MATCH` and joins results back to the emergency rows. The dashboard currently uses `LIKE`, which supports arbitrary substring matching (including a partial middle-of-word match). `MATCH` is available as a separate method for testing/extension; FTS prefix matching has different behavior and is not substituted silently for `LIKE`.
-
-### Severity counts
+### Statistics
 
 ```sql
-SELECT danger_level, COUNT(*) AS case_count
-FROM emergencies
+SELECT danger_level, COUNT(*) FROM emergencies
 GROUP BY danger_level
-ORDER BY CASE danger_level
-    WHEN 'critical' THEN 0
-    WHEN 'moderate' THEN 1
-    ELSE 2
-END;
+ORDER BY CASE danger_level WHEN 'critical' THEN 0 WHEN 'moderate' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END;
+
+SELECT COALESCE(e.danger_level, 'unspecified') AS danger_level, COUNT(*)
+FROM treated_cases t LEFT JOIN emergencies e ON e.case_id = t.case_id
+GROUP BY 1
+ORDER BY CASE danger_level WHEN 'critical' THEN 0 WHEN 'moderate' THEN 1 WHEN 'minor' THEN 2 ELSE 3 END;
+
+SELECT substr(event_date, 1, 7) AS month, COUNT(*) FROM treated_cases
+GROUP BY month ORDER BY month DESC LIMIT 6;
 ```
 
-### Treated-case search/history
+### Treated-case history and search
 
-The record query filters description, procedures, or date using bound `LIKE` values, and sorts by `event_date DESC, record_id DESC`.
+```sql
+SELECT t.record_id, t.description, t.event_date, t.photo_path, t.procedures, t.case_id,
+       e.title_en, e.title_ar, e.danger_level
+FROM treated_cases t LEFT JOIN emergencies e ON e.case_id = t.case_id
+WHERE t.description LIKE ? ESCAPE '\' OR t.procedures LIKE ? ESCAPE '\' OR t.event_date LIKE ? ESCAPE '\'
+   OR e.title_en LIKE ? ESCAPE '\' OR e.title_ar LIKE ? ESCAPE '\'
+ORDER BY t.event_date DESC, t.record_id DESC;
+```
 
-## 6. CRUD and interaction implemented
+## 6. CRUD
 
-- **Contacts:** insert and update through `saveContact()`, list through `getContacts()`, delete through `deleteContact()`. The activity validates name/phone fields and opens Android’s dialer with `ACTION_DIAL`; it does not request permission to place calls directly.
-- **Treated-case records:** insert description/date/procedures plus an optional photo URI; list/search and delete are implemented. The image is referenced by URI rather than copied into the app database as a BLOB.
-- **Emergency catalog:** read/search and ordered steps are implemented; emergency cases are seeded and currently not user-editable.
+| Data | Create / update | Read | Delete |
+|---|---|---|---|
+| Emergencies and steps | Shipped content (read-only in the app) | `searchEmergencies`, `getEmergency`, `getSteps` | — |
+| Contacts | `saveContact(id, name, phone)` (insert when `id < 0`; update only where `preset = 0`) | `getContacts()` (presets first, then by name) | `deleteContact(id)` (only `preset = 0`) |
+| Treated cases | `saveTreatedCase(id, caseId, description, date, photoPath, procedures)` | `getTreatedCase(id)`, `getTreatedCases(query)` | `deleteTreatedCase(id)` (the screen also deletes the photo file) |
 
-## 7. Versioning, validation, and next database work
+## 7. Validation and integrity
 
-- `DB_VERSION` is `1`. `onUpgrade()` is currently a placeholder; schema changes must use explicit, preferably non-destructive migrations before increasing this value.
-- The treated-case form checks that required text is present and that the date matches the `YYYY-MM-DD` shape. Calendar-validity checks and comprehensive automated database tests remain to be added.
-- Test database creation on a clean install, app relaunch, search with empty/partial/Arabic text, ordered steps, contact edits/deletes, saved records, severity counts, photo URI persistence, and upgrade behavior.
-- A build was attempted with Android Studio's installed Java 21 JBR. Gradle 9.4.1 downloaded successfully, but dependency resolution timed out while downloading Android Gradle Plugin 9.2.1 from Google Maven and the Kotlin Gradle plugin from Maven Central. No debug APK was produced, so compilation and runtime behavior are not yet verified.
+- Database: `NOT NULL`, `CHECK` on severity, `UNIQUE(case_id, step_number)`, and enforced foreign keys.
+- Contact form: name required; phone limited to digits, `+ ( ) -` and spaces with at least 3 digits; the dialog stays open on error.
+- Treated-case form: description and procedures required; strict `YYYY-MM-DD` parsing with no future dates; length limits (200 / 2000 characters).
+- Search: escaped LIKE wildcards, bound parameters, LIKE-only fallback.
+
+## 8. Performance
+
+Production queries on the v6 database (8 cases), 200 warm-up runs and 20,000 timed runs each, SQLite 3.53 on the development PC:
+
+| Query | Mode | Average | Rows |
+|---|---|---|---|
+| Empty search (all cases) | Full scan | 130 µs | 8 |
+| `bur` | MATCH + LIKE | 194 µs | 1 |
+| `sna ins` | MATCH + LIKE | 205 µs | 1 |
+| `لدغ` | MATCH + LIKE | 200 µs | 1 |
+| `كسو` | MATCH + LIKE | 206 µs | 1 |
+| Guide cases by severity | GROUP BY + COUNT | 116 µs | 3 |
+
+Every query finishes in under 0.25 ms, so search runs on every keystroke without delay.
+
+## 9. Changing the content
+
+1. Edit `CASES` in `tools/generate_assets_db.py` and the matching `SEED_CASES` / `SEED_STEPS` in `DatabaseHelper`.
+2. Run `python tools/generate_assets_db.py`.
+3. Increase `DB_VERSION` and the script's `user_version` together, and add an `onUpgrade()` step (normally `seedEmergencyContent(db); rebuildFts(db);`).

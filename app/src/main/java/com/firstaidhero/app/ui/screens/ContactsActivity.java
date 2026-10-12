@@ -1,37 +1,42 @@
 package com.firstaidhero.app.ui.screens;
 
-import android.Manifest;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
-import android.os.Bundle;
-import android.provider.ContactsContract;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
-import android.widget.Toast;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import com.firstaidhero.app.core.AppPreferences;
-import com.firstaidhero.app.core.I18n;
-import com.firstaidhero.app.R;
-import com.firstaidhero.app.data.DatabaseHelper;
-import com.firstaidhero.app.data.DeviceContacts;
-import com.firstaidhero.app.ui.Ui;
-import java.util.ArrayList;
-import java.util.List;
+import android.Manifest;  // أسماء صلاحيات أندرويد مثل READ_CONTACTS و CALL_PHONE
+import android.content.Intent;  // طلب لفتح شاشة أخرى أو تطبيق آخر (الاتصال، منتقي جهات الاتصال)
+import android.content.pm.PackageManager;  // للتحقق من منح الصلاحيات
+import android.database.Cursor;  // مؤشر لقراءة نتائج الاستعلام صفاً صفاً
+import android.graphics.drawable.GradientDrawable;  // خلفية بلون أو تدرج مع زوايا دائرية وإطار
+import android.net.Uri;  // عنوان لمورد مثل صورة أو جهة اتصال أو رقم هاتف (tel:)
+import android.os.Bundle;  // حاوية لحفظ حالة الشاشة وتمرير البيانات بين الشاشات
+import android.provider.ContactsContract;  // أسماء جداول وأعمدة جهات اتصال الجهاز
+import android.view.Gravity;  // محاذاة العناصر والنصوص
+import android.view.View;  // الفئة الأساسية لكل عناصر الواجهة
+import android.widget.Button;  // زر
+import android.widget.EditText;  // حقل إدخال نص
+import android.widget.ImageView;  // عرض صورة أو أيقونة
+import android.widget.LinearLayout;  // حاوية ترتب العناصر عمودياً أو أفقياً
+import android.widget.ScrollView;  // حاوية قابلة للتمرير
+import android.widget.TextView;  // عرض نص
+import android.widget.Toast;  // رسالة قصيرة مؤقتة أسفل الشاشة
+import androidx.activity.result.ActivityResultLauncher;  // إطلاق طلب (صلاحية أو منتقٍ) واستقبال نتيجته
+import androidx.activity.result.contract.ActivityResultContracts;  // عقود جاهزة: طلب صلاحية، منتقي صور، فتح شاشة واستقبال نتيجة
+import androidx.appcompat.app.AlertDialog;  // نافذة حوار (تأكيد، نموذج، قائمة اختيار)
+import androidx.core.app.ActivityCompat;  // أدوات الصلاحيات مثل معرفة ضرورة شرح سبب الصلاحية
+import androidx.core.content.ContextCompat;  // التحقق من منح صلاحية بطريقة متوافقة
+import com.firstaidhero.app.core.AppPreferences;  // إعدادات التطبيق المحفوظة (اللغة، المظهر)
+import com.firstaidhero.app.core.I18n;  // نصوص الواجهة بالعربية والإنجليزية
+import com.firstaidhero.app.R;  // معرّفات موارد المشروع (أيقونات، قوائم)
+import com.firstaidhero.app.data.DatabaseHelper;  // قاعدة البيانات وكل الاستعلامات
+import com.firstaidhero.app.data.DeviceContacts;  // قراءة جهات اتصال الجهاز
+import com.firstaidhero.app.ui.Ui;  // نظام التصميم المشترك (ألوان، نصوص، أزرار)
+import java.util.ArrayList;  // قائمة ديناميكية
+import java.util.List;  // واجهة القوائم
 
+/**
+ * شاشة أرقام الطوارئ (Emergency Dialer): الأرقام العامة (شرطة، إسعاف، إطفاء) وأرقام المستخدم الخاصة،
+ * مع إضافة وتعديل وحذف واتصال مباشر، واختيار رقم من جهات اتصال الجهاز.
+ */
 public class ContactsActivity extends BaseActivity {
+    /** قاعدة البيانات، وقائمتا الأرقام العامة والخاصة، وحقلا النموذج المفتوح، وطلبا الصلاحية والمنتقي. */
     private DatabaseHelper db;
     private LinearLayout emergencyList;
     private LinearLayout userList;
@@ -40,6 +45,7 @@ public class ContactsActivity extends BaseActivity {
     private ActivityResultLauncher<String> permissionLauncher;
     private ActivityResultLauncher<Intent> contactPickerLauncher;
 
+    /** تسجّل طلب صلاحية جهات الاتصال ومنتقي جهات الاتصال في النظام، ثم تبني الشاشة. */
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         db = new DatabaseHelper(this);
@@ -54,8 +60,10 @@ public class ContactsActivity extends BaseActivity {
         });
         render();
     }
+    /** تحديث القوائم عند العودة إلى الشاشة. */
     @Override protected void onResume() { super.onResume(); if (db != null && emergencyList != null) load(); }
 
+    /** تبني البطاقة الحمراء للأرقام العامة، وزر الإضافة، وقائمة الأرقام الخاصة. */
     private void render() {
         LinearLayout content = Ui.column(this);
         Ui.addSectionHeader(this, content, I18n.t(this, "contacts"), I18n.t(this, "contacts_sub"));
@@ -71,7 +79,7 @@ public class ContactsActivity extends BaseActivity {
         ImageView mark = icon(R.drawable.ic_nav_contacts, Ui.WHITE, 0x33FFFFFF, 8, 40, I18n.t(this, "emergency_numbers"));
         head.addView(mark, Ui.lp(this, 40, 40));
         TextView emTitle = Ui.text(this, I18n.t(this, "emergency_numbers"), 15, Ui.WHITE, true);
-        LinearLayout.LayoutParams etp = Ui.lp(this, -1, -2); etp.leftMargin = Ui.dp(this, 12); head.addView(emTitle, etp);
+        LinearLayout.LayoutParams etp = Ui.lp(this, -1, -2); etp.setMarginStart(Ui.dp(this, 12)); head.addView(emTitle, etp);
         emergencyCard.addView(head);
         emergencyList = new LinearLayout(this);
         emergencyList.setOrientation(LinearLayout.VERTICAL);
@@ -92,6 +100,7 @@ public class ContactsActivity extends BaseActivity {
         load();
     }
 
+    /** تقرأ الأرقام من القاعدة وتوزعها: العامة داخل البطاقة الحمراء والخاصة كبطاقات، مع رسالة عند عدم وجود أرقام خاصة. */
     private void load() {
         emergencyList.removeAllViews();
         userList.removeAllViews();
@@ -125,6 +134,7 @@ public class ContactsActivity extends BaseActivity {
         }
     }
 
+    /** خط فاصل رفيع بين الأرقام العامة. */
     private View hairline(int color) {
         View v = new View(this);
         v.setBackgroundColor(color);
@@ -132,6 +142,7 @@ public class ContactsActivity extends BaseActivity {
         return v;
     }
 
+    /** صف رقم عام: أيقونة، الاسم، الرقم؛ الضغط عليه يتصل مباشرة. */
     private LinearLayout emergencyRow(String name, String phone) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -142,7 +153,7 @@ public class ContactsActivity extends BaseActivity {
         LinearLayout words = new LinearLayout(this);
         words.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(0, -2, 1);
-        wp.leftMargin = Ui.dp(this, 12);
+        wp.setMarginStart(Ui.dp(this, 12));
         row.addView(words, wp);
         words.addView(Ui.text(this, name, 15, Ui.WHITE, true));
         TextView num = Ui.text(this, phone, 13, 0xFFFFE7E8, false);
@@ -153,10 +164,11 @@ public class ContactsActivity extends BaseActivity {
         row.setClickable(true);
         row.setFocusable(true);
         row.setForeground(getDrawable(android.R.drawable.list_selector_background));
-        row.setOnClickListener(v -> dial(phone));
+        row.setOnClickListener(v -> call(phone));
         return row;
     }
 
+    /** بطاقة رقم خاص: الحرف الأول من الاسم، الاسم، الرقم، وأزرار الاتصال والتعديل والحذف. */
     private LinearLayout userCard(long id, String name, String phone) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -170,7 +182,7 @@ public class ContactsActivity extends BaseActivity {
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(0, -2, 1);
-        labelLp.leftMargin = Ui.dp(this, 12);
+        labelLp.setMarginStart(Ui.dp(this, 12));
         info.addView(labels, labelLp);
         labels.addView(Ui.text(this, name, 16, Ui.ink(this), true));
         TextView num = Ui.text(this, phone, 13, Ui.muted(this), false);
@@ -179,20 +191,22 @@ public class ContactsActivity extends BaseActivity {
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.END);
         LinearLayout.LayoutParams al = Ui.lp(this, -1, 40); al.topMargin = Ui.dp(this, 12); card.addView(actions, al);
-        actions.addView(actionButton(R.drawable.ic_nav_contacts, Ui.WHITE, Ui.RED, 8, 40, I18n.t(this, "call"), v -> dial(phone)));
+        actions.addView(actionButton(R.drawable.ic_nav_contacts, Ui.WHITE, Ui.RED, 8, 40, I18n.t(this, "call"), v -> call(phone)));
         ImageView editBtn = actionButton(R.drawable.ic_edit, Ui.RED, Ui.softAccent(this), 8, 40, I18n.t(this, "edit"), v -> edit(id, name, phone));
         ImageView deleteBtn = actionButton(R.drawable.ic_delete, Ui.RED, Ui.softAccent(this), 8, 40, I18n.t(this, "delete"), v -> confirmDelete(id, name));
-        LinearLayout.LayoutParams em = Ui.lp(this, 40, 40); em.leftMargin = Ui.dp(this, 8); actions.addView(editBtn, em);
-        LinearLayout.LayoutParams dm = Ui.lp(this, 40, 40); dm.leftMargin = Ui.dp(this, 8); actions.addView(deleteBtn, dm);
+        LinearLayout.LayoutParams em = Ui.lp(this, 40, 40); em.setMarginStart(Ui.dp(this, 8)); actions.addView(editBtn, em);
+        LinearLayout.LayoutParams dm = Ui.lp(this, 40, 40); dm.setMarginStart(Ui.dp(this, 8)); actions.addView(deleteBtn, dm);
         return card;
     }
 
+    /** أيقونة دائرية قابلة للضغط تنفّذ إجراءً. */
     private ImageView actionButton(int drawable, int tint, int bg, int innerDp, int sizeDp, String description, View.OnClickListener listener) {
         ImageView v = icon(drawable, tint, bg, innerDp, sizeDp, description);
         v.setOnClickListener(listener);
         return v;
     }
 
+    /** أيقونة دائرية ملونة مع وصف لقارئ الشاشة. */
     private ImageView icon(int drawable, int tint, int bg, int innerDp, int sizeDp, String description) {
         ImageView v = new ImageView(this);
         v.setImageResource(drawable);
@@ -207,10 +221,7 @@ public class ContactsActivity extends BaseActivity {
         return v;
     }
 
-    private void dial(String phone) {
-        startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(phone))));
-    }
-
+    /** نافذة تأكيد قبل حذف الرقم. */
     private void confirmDelete(long id, String name) {
         new AlertDialog.Builder(this)
                 .setMessage(I18n.t(this, "delete") + " " + name + "?")
@@ -219,6 +230,10 @@ public class ContactsActivity extends BaseActivity {
                 .show();
     }
 
+    /**
+     * نافذة إضافة أو تعديل رقم. التحقق: الاسم مطلوب، والرقم يقبل الأرقام و + ( ) - والمسافة فقط وبحد أدنى 3 أرقام.
+     * عند الخطأ يظهر الخطأ بجانب الحقل وتبقى النافذة مفتوحة دون فقدان ما كُتب.
+     */
     private void edit(long id, String oldName, String oldPhone) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -239,23 +254,26 @@ public class ContactsActivity extends BaseActivity {
         choose.setOnClickListener(v -> chooseFromDeviceContacts());
         pendingName = name;
         pendingPhone = phone;
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(id < 0 ? I18n.t(this, "add") : I18n.t(this, "edit"))
                 .setView(form)
                 .setNegativeButton(I18n.t(this, "cancel"), null)
-                .setPositiveButton(I18n.t(this, "save"), (d, w) -> {
-                    String n = name.getText().toString().trim();
-                    String p = phone.getText().toString().trim();
-                    if (n.isEmpty() || p.replaceAll("[+0-9() .-]", "").length() != 0 || p.replaceAll("\\D", "").length() < 3) {
-                        new AlertDialog.Builder(this).setMessage(I18n.t(this, "required")).setPositiveButton("OK", null).show();
-                        return;
-                    }
-                    db.saveContact(id, n, p);
-                    load();
-                })
+                .setPositiveButton(I18n.t(this, "save"), null)
                 .show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String n = name.getText().toString().trim();
+            String p = phone.getText().toString().trim();
+            boolean valid = true;
+            if (n.isEmpty()) { name.setError(I18n.t(this, "field_required")); valid = false; }
+            if (p.replaceAll("[+0-9() .-]", "").length() != 0 || p.replaceAll("\\D", "").length() < 3) { phone.setError(I18n.t(this, "invalid_phone")); valid = false; }
+            if (!valid) return;
+            if (db.saveContact(id, n, p) < 0) { Toast.makeText(this, I18n.t(this, "save_failed"), Toast.LENGTH_LONG).show(); return; }
+            dialog.dismiss();
+            load();
+        });
     }
 
+    /** اختيار رقم من جهات الجهاز: إن كانت الصلاحية ممنوحة تظهر القائمة، وإلا يُشرح سببها ثم تُطلب. */
     private void chooseFromDeviceContacts() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
             showDeviceContactPicker();
@@ -271,12 +289,14 @@ public class ContactsActivity extends BaseActivity {
         }
     }
 
+    /** عند رفض الصلاحية: فتح منتقي جهات الاتصال في النظام الذي لا يحتاج صلاحية. */
     private void openSystemContactPicker() {
         Toast.makeText(this, I18n.t(this, "contacts_denied"), Toast.LENGTH_LONG).show();
         Intent intent = new Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
         try { contactPickerLauncher.launch(intent); } catch (Exception e) { }
     }
 
+    /** تعرض أول 100 جهة اتصال من الجهاز؛ الاختيار يملأ حقلي الاسم والرقم. */
     private void showDeviceContactPicker() {
         Cursor c = DeviceContacts.query(this);
         if (c == null) { openSystemContactPicker(); return; }
@@ -312,6 +332,7 @@ public class ContactsActivity extends BaseActivity {
         dialog.show();
     }
 
+    /** صف جهة اتصال في قائمة الاختيار. */
     private LinearLayout deviceContactRow(String name, String number) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -323,7 +344,7 @@ public class ContactsActivity extends BaseActivity {
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(0, -2, 1);
-        ll.leftMargin = Ui.dp(this, 12);
+        ll.setMarginStart(Ui.dp(this, 12));
         row.addView(labels, ll);
         labels.addView(Ui.text(this, name, 15, Ui.ink(this), true));
         TextView num = Ui.text(this, number, 13, Ui.muted(this), false);
@@ -335,6 +356,7 @@ public class ContactsActivity extends BaseActivity {
         return row;
     }
 
+    /** تقرأ جهة الاتصال التي أعادها منتقي النظام وتملأ الحقول. */
     private void fillFromUri(Uri uri) {
         Cursor c = null;
         try { c = DeviceContacts.lookup(this, uri); } catch (SecurityException e) { c = null; }
@@ -345,10 +367,12 @@ public class ContactsActivity extends BaseActivity {
         }
     }
 
+    /** تكتب الاسم والرقم المختارين في حقلي النموذج المفتوح. */
     private void applyPicked(String name, String phone) {
         if (pendingName != null) pendingName.setText(name == null ? "" : name);
         if (pendingPhone != null) pendingPhone.setText(phone == null ? "" : phone);
     }
 
+    /** إغلاق قاعدة البيانات عند إغلاق الشاشة. */
     @Override protected void onDestroy() { if (db != null) db.close(); super.onDestroy(); }
 }

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- عناصر شريط التنقل السفلي الخمسة: الرئيسية، السجل، الإحصاءات، الاتصال، الإعدادات -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_home"
@@ -8,6 +9,10 @@
         android:id="@+id/nav_records"
         android:icon="@drawable/ic_nav_records"
         android:title="@string/tab_records" />
+    <item
+        android:id="@+id/nav_stats"
+        android:icon="@drawable/ic_nav_stats"
+        android:title="@string/tab_stats" />
     <item
         android:id="@+id/nav_contacts"
         android:icon="@drawable/ic_nav_contacts"
