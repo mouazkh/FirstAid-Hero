@@ -43,6 +43,7 @@ com.firstaidhero.app
 | `app/src/main/assets/databases/firstaid_hero.db` | قاعدة البيانات الجاهزة المسبقة الصنع التي تُشحن داخل التطبيق |
 | `tools/generate_assets_db.py` | سكربت Python يولّد قاعدة البيانات الجاهزة السابقة. يُشغَّل بالأمر `python tools/generate_assets_db.py` بعد أي تعديل على المحتوى |
 | `app/src/main/AndroidManifest.xml` | تعريف الشاشات والصلاحيات (`READ_CONTACTS`, `CALL_PHONE`) |
+| `res/drawable-nodpi/ic_launcher_art.png` + `res/mipmap-anydpi/ic_launcher.xml` | أيقونة التطبيق: صورة الأيقونة داخل أيقونة تكيفية بخلفية حمراء ونسخة أحادية اللون للأيقونات ذات السمة |
 | `app/src/main/res/menu/bottom_nav.xml` | عناصر شريط التنقل السفلي الخمسة |
 | `app/src/main/res/drawable/ic_*.xml` | أيقونات متجهية (Vector) للتنقل والأزرار |
 

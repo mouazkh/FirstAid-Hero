@@ -65,6 +65,19 @@ A shared five-tab Material `BottomNavigationView` links **Home**, **Records**, *
 
 `PhotoStore` copies the picked image (system photo picker, no permission needed) into `files/photos/` as a JPEG of at most 1280 px. The database stores only the file name. Thumbnails are decoded at the size needed. Deleting a record or replacing its photo deletes the file.
 
+## Launcher icon
+
+| File | Role |
+|---|---|
+| `res/drawable-nodpi/ic_launcher_art.png` | The app icon artwork (1024 px) |
+| `res/drawable/ic_launcher_foreground.xml` | Adaptive-icon foreground: the artwork inset by 15dp so the circle and cross stay inside the safe zone of every launcher mask |
+| `res/drawable/ic_launcher_background.xml` | Red gradient behind it (#BA202C → #8B191F) |
+| `res/drawable/ic_launcher_monochrome.xml` | White cross for Android 13+ themed icons |
+| `res/mipmap-anydpi/ic_launcher.xml`, `ic_launcher_round.xml` | The adaptive icon definitions referenced by the manifest |
+| `app/src/main/ic_launcher-playstore.png` | 512 px store icon |
+
+minSdk 30 always uses the adaptive icon, so no per-density bitmap icons are needed.
+
 ## Permissions
 
 | Permission | Use | If refused |
