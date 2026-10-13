@@ -1,0 +1,3 @@
+#!/bin/sh
+# Run the same checks as CI before pushing, so CI rarely fails. Skip once with: git push --no-verify
+./gradlew lintDebug testDebugUnitTest --quiet

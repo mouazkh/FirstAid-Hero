@@ -13,4 +13,17 @@
 .externalNativeBuild
 .cxx
 local.properties
-/report/tools/node_modules
+
+# graphify knowledge graph
+graphify-out/
+
+# Secrets and signing keys - never commit
+.env
+.env.*
+*.jks
+*.keystore
+key.properties
+keystore.properties
+*.pem
+*.p12
+node_modules/
